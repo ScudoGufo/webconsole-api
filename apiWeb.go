@@ -1,93 +1,35 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
-	"time"
 
 	"github.com/gorilla/mux"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
 	"local.org/complexlog"
 )
 
 const (
 	DOMAIN = "api.test.local"
-	DBHOST = "127.0.0.1"
-	DBPORT = "27017"
 )
 
 var (
 	COMMAND = map[string]func(map[string]string) string{
 		"help":    help,
+		"list":    list,
 		"read":    read,
 		"comment": comment,
 		"login":   login,
 		"echo":    echo,
 	}
+	mdb MongoDb
 )
-
-type comment struct {
-	id string
-	author string 
-	date string
-	text string
-}
-
-type author struct{
-	id string
-	name string
-	nick string
-}
-
-type post struct {
-	id string
-	author author
-	date string 
-	view string 
-	text string
-	comment []comment
-}
-
-type appHandler func(w http.ResponseWriter, r *http.Request)
 
 func main() {
 
-	// mongo db connection
-	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
-	client, err := mongo.Connect(ctx, options.Client().ApplyURI("mongodb://localhost:27017"))
-	if err != nil {
-        log.Fatal(err)
-	}
-	defer client.Disconnect(ctx)
-
-	//get collection
-	db := client.Database("blog")
-	postsCol := db.Collection("post")
-	commentCol := db.Collection("comment")
-
-	// insert mock data in db 
-	lastInteraction , err  := commentCol.InsertOne(ctx, []interface{}{
-		bson.D{
-			{"text","comment 1"},
-			{"author","io"},
-			{"data","2/1/1992"},
-		}
-	})
-
-	lastInteraction , err  := postsCol.InsertOne(ctx, []interface{}{
-		bson.D{
-			{"data","1/1/1992"},
-			{"text","post 1"},
-			{"author","io"},
-			{"comment",[lastInteraction.InsertedID]},
-		}
-	})
-
-	// done
+	mdb = MongoDb{}
+	mdb.connect()
 
 	//api router setting
 	r := mux.NewRouter()
@@ -100,7 +42,7 @@ func main() {
 	complexlog.Servlog("api init")
 
 	//server web lintening
-	err = http.ListenAndServe(":8000", r)
+	err := http.ListenAndServe(":8000", r)
 	if err != nil {
 		log.Fatal("ListenAndServe: ", err)
 	}
@@ -168,7 +110,11 @@ func checkCmdPresence(cmd string) bool {
 */
 
 func help(args map[string]string) string {
-	return "help"
+	return fmt.Sprintf(helpText, "User ")
+}
+func list(args map[string]string) string {
+	mdb.getPost()
+	return "read"
 }
 func read(args map[string]string) string {
 	return "read"
